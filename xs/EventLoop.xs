@@ -20,6 +20,15 @@ void
 DESTROY (self)
 	EventLoop self
 
+	PREINIT:
+		int rc = UV_EBUSY;
+
 	CODE:
-		uv_loop_close (self);
+		while (rc == UV_EBUSY)
+		{
+			uv_run (self, UV_RUN_ONCE);
+			rc = uv_loop_close (self);
+		}
+
 		Safefree (self);
+

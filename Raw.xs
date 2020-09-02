@@ -53,6 +53,11 @@ STATIC void *uv_raw_sv_to_ptr (const char *type, SV *sv, const char *file, int l
 #define UV_SV_TO_PTR(type, sv) \
 	uv_raw_sv_to_ptr(#type, sv, __FILE__, __LINE__)
 
+STATIC void uv_raw__close_cb (uv_handle_t *handle)
+{
+	Safefree (handle);
+}
+
 MODULE = UV::Raw               PACKAGE = UV::Raw
 
 INCLUDE: xs/Async.xs

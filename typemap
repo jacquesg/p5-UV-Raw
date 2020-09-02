@@ -1,5 +1,8 @@
 EventLoop              T_UV_RAW_REF
 TCP                    T_UV_RAW_REF
+TTY                    T_UV_RAW_REF
+Handle                 T_UV_RAW_REF
+Stream                 T_UV_RAW_REF
 
 OUTPUT
 T_UV_RAW_REF

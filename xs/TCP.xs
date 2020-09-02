@@ -23,9 +23,3 @@ new (class, loop)
 
 	OUTPUT: RETVAL
 
-void
-DESTROY (self)
-	TCP self
-
-	CODE:
-		Safefree (self);
