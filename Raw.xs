@@ -14,6 +14,16 @@
 #define MUTABLE_AV(p) ((AV *)MUTABLE_PTR(p))
 #endif
 
+typedef struct
+{
+	int code;
+	SV *message;
+	const char *file;
+	unsigned int line;
+} uv_raw_error;
+
+typedef uv_raw_error *Error;
+
 typedef uv_async_t uv_raw_async;
 typedef uv_loop_t uv_raw_eventloop;
 typedef uv_tcp_t uv_raw_tcp;
@@ -52,6 +62,87 @@ STATIC void *uv_raw_sv_to_ptr (const char *type, SV *sv, const char *file, int l
 
 #define UV_SV_TO_PTR(type, sv) \
 	uv_raw_sv_to_ptr(#type, sv, __FILE__, __LINE__)
+
+STATIC const COP *uv_closest_cop (pTHX_ const COP *cop, const OP *o, const OP *curop, bool opnext)
+{
+	dVAR;
+
+	if (!o || !curop || (
+	opnext ? o->op_next == curop && o->op_type != OP_SCOPE : o == curop
+	))
+		return cop;
+
+	if (o->op_flags & OPf_KIDS) {
+		const OP *kid;
+		for (kid = cUNOPo->op_first; kid; kid = OpSIBLING(kid)) {
+			const COP *new_cop;
+
+			if (kid->op_type == OP_NULL && kid->op_targ == OP_NEXTSTATE)
+				cop = (const COP *)kid;
+
+			/* Keep searching, and return when we've found something. */
+			new_cop = uv_closest_cop(aTHX_ cop, kid, curop, opnext);
+			if (new_cop)
+				return new_cop;
+		}
+    }
+
+    return NULL;
+}
+
+STATIC Error create_error_obj (int code, SV *message)
+{
+	Error e;
+	const COP *cop;
+
+	Newxz (e, 1, uv_raw_error);
+	e -> code = code;
+	e -> message = message;
+
+	cop = uv_closest_cop(aTHX_ PL_curcop, OpSIBLING(PL_curcop), PL_op, FALSE);
+	if (cop == NULL)
+		cop = PL_curcop;
+
+	if (CopLINE (cop))
+	{
+		e -> file = CopFILE (cop);
+		e -> line = CopLINE (cop);
+	}
+	else
+		e -> file = "unknown";
+
+	return e;
+}
+
+STATIC Error create_error_obj_fmt (int code, const char *prefix, const char *pat, va_list *list)
+{
+	Error e;
+
+	e = create_error_obj(code, newSVpv(prefix, 0));
+	sv_vcatpvf(e -> message, pat, list);
+
+	return e;
+}
+
+STATIC void __attribute__noreturn__ croak_error_obj (Error e)
+{
+	SV *res = NULL;
+	UV_NEW_OBJ (res, "UV::Raw::Error", e);
+	SvREFCNT_inc(e -> message);
+	croak_sv(res);
+}
+
+STATIC void S_uv_check_error(int err, const char *file, int line)
+{
+	if (err != 0)
+	{
+		Error e = create_error_obj (err, newSVpv (uv_strerror (err), 0));
+		croak_error_obj (e);
+	}
+}
+
+#define uv_check_error(e) S_uv_check_error(e, __FILE__, __LINE__)
+
 
 STATIC void uv_raw__close_cb (uv_handle_t *handle)
 {
